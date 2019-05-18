@@ -11,10 +11,22 @@
                                        :max-population 1000
                                        :max-birth-prob 0.1
                                        :clear-prob 0.05
-                                       :number-of-trials 300
+                                       :number-of-trials 100
                                        :virus-type :simple}
                           :partial-results []
-                          :results []}}})
+                          :results []}
+                 :resistant {:parameters {:number-of-viruses 100
+                                          :max-population 1000
+                                          :max-birth-prob 0.1
+                                          :clear-prob 0.05
+                                          :number-of-trials 100
+                                          :virus-type :resistant
+                                          :resistances {:drug-a true
+                                                        :drug-b true}
+                                          :mutation-prob 0.1
+                                          :active-drugs #{:drug-a :drug-b}}
+                             :partial-results []
+                             :results []}}})
 
 (rf/reg-event-db
   :initialize-db
@@ -43,20 +55,22 @@
     (assoc-in db path value)))
 
 (defn simulate [{:keys [number-of-viruses max-population max-birth-prob
-                        clear-prob number-of-trials]
+                        clear-prob number-of-trials active-drugs]
                  :as parameters}]
   (let [step (fn step [viruses]
                (loop [alive []
                       q viruses]
                  (if-let [v (first q)]
-                   (recur (cond-> alive
-                            (not (virus/dies? v)) (conj v)
+                   (let [dies? (virus/dies? v active-drugs)]
+                    (recur (cond-> alive
+                             (not dies?) (conj v)
 
-                            (virus/reproduces? v (/ (+ (count alive)
-                                                       (count viruses))
-                                                    max-population))
-                            (conj (virus/reproduce v)))
-                          (rest q))
+                             (and (not dies?)
+                                  (virus/reproduces? v (/ (+ (count alive)
+                                                             (count viruses))
+                                                          max-population)))
+                             (conj (virus/reproduce v)))
+                           (rest q)))
                    alive)))
         initial-viruses (virus/initial parameters)
         perform-trial (fn [viruses]
@@ -75,8 +89,13 @@
                       :simulations
                       :simple
                       :parameters
-                      (assoc :number-of-trials 15)
-                      (assoc :virus-type :simple))))
+                      (assoc :number-of-trials 15))))
+
+  (time (simulate (-> default-db
+                      :simulations
+                      :simple
+                      :parameters
+                      (assoc :number-of-trials 15))))
   )
 
 (defn partial-to-final
@@ -112,7 +131,7 @@
                                       :number-of-trials
                                       remaining)]
                      [:finalize (:virus-type parameters)])]
-      {:dispatch-n [[:add-results :simple
+      {:dispatch-n [[:add-results (:virus-type parameters)
                      (simulate (assoc parameters :number-of-trials chunk-size))]
                     followup]})))
 
@@ -167,20 +186,30 @@
   (let [parameters @(rf/subscribe [:get-in [:simulations :simple :parameters]])
         simple-results @(rf/subscribe [:simulation-results :simple :results])
         simple-partials @(rf/subscribe [:simulation-results :simple :partial-results])
+
+        resistant-parameters @(rf/subscribe [:get-in [:simulations :resistant :parameters]])
+        resistant-results @(rf/subscribe [:simulation-results :resistant :results])
+        resistant-partials @(rf/subscribe [:simulation-results :resistant :partial-results])
         computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
      [:button {:on-click #(do
                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
                             (rf/dispatch [:simulate parameters]))
                :disabled computing?} "Simulate Simple Virus"]
+     [:button {:on-click #(do
+                            (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                            (rf/dispatch [:simulate resistant-parameters]))
+               :disabled computing?} "Simulate Drug resistant Virus"]
      (when computing?
        [:h1 "Performed "
-        (-> simple-partials count)
+        (-> resistant-partials count)
         " trials of "
         (-> parameters
             :number-of-trials)])
      (when (seq simple-results)
-       [chart-container :simple simple-results])]))
+       [chart-container :simple simple-results])
+     (when (seq resistant-results)
+       [chart-container :resistant resistant-results])]))
 
 (defn start []
   (r/render [page]
