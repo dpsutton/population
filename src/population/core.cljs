@@ -1,13 +1,12 @@
 (ns population.core
   (:require [reagent.core :as r]
             [re-frame.core :as rf]
-            #_["chart.js" :default Chart]
             ["chart.js" :as Chart]))
 
 ;; define your app data so that it doesn't get over-written on reload
 
 (def default-db
-  {:simulation-results (list)
+  {:simple-simulation {}
    :parameters {:number-of-viruses 100
                 :max-population 1000
                 :max-birth-prob 0.1
