@@ -26,17 +26,23 @@
 (rf/reg-event-db
   :add-results
   (fn [db [_ {:keys [virus-type parameters results id]}]]
-    (update-in db
-               [:simulation-results]
-               #(take 10 (conj % {:virus-type virus-type
-                                  :parameters parameters
-                                  :simulation-results results
-                                  :id id})))))
+    (-> db
+        (assoc :chart-spinning? false)
+        (update-in [:simulation-results]
+                   #(take 10 (conj % {:virus-type virus-type
+                                      :parameters parameters
+                                      :simulation-results results
+                                      :id id}))))))
 
 (rf/reg-sub
   :get-in
   (fn [db [_ path]]
     (get-in db path)))
+
+(rf/reg-event-db
+  :assoc-in
+  (fn [db [_ path value]]
+    (assoc-in db path value)))
 
 (defn chance? [threshold]
   (<= (rand) threshold))
@@ -89,12 +95,18 @@
   )
 
 (rf/reg-event-fx
-  :simulate-simple
+  :compute-simple
   (fn [_ [_ parameters]]
     {:dispatch [:add-results {:virus-type :simple
                               :parameters parameters
                               :results (simulate-simple parameters)
                               :id (gensym "simple-chart")}]}))
+
+(rf/reg-event-fx
+  :simulate-simple
+  (fn [_ [_ parameters]]
+    {:dispatch-n [[:assoc-in [:chart-spinning?] true]
+                  [:compute-simple parameters]]}))
 
 (defn config [{:keys [simulation-results virus-type] :as results}]
   (clj->js
@@ -141,9 +153,12 @@
 
 (defn page []
   (let [parameters @(rf/subscribe [:get-in [:parameters]])
-        results @(rf/subscribe [:get-in [:simulation-results]])]
+        results @(rf/subscribe [:get-in [:simulation-results]])
+        computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
      [:button {:on-click #(rf/dispatch [:simulate-simple parameters])} "Simulate"]
+     (when computing?
+       [:h1 "Performing " (:number-of-trials parameters) " trials"])
      [charts results]]))
 
 (defn start []
