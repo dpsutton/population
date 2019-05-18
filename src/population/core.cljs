@@ -24,14 +24,10 @@
 
 (rf/reg-event-db
   :add-results
-  (fn [db [_ {:keys [virus-type parameters results id]}]]
+  (fn [db [_ results]]
     (-> db
-        (assoc :chart-spinning? false)
-        (update-in [:simulation-results]
-                   #(take 10 (conj % {:virus-type virus-type
-                                      :parameters parameters
-                                      :simulation-results results
-                                      :id id}))))))
+        (update-in [:simple-simulation :partial-results]
+                   into results))))
 
 (rf/reg-sub
   :get-in
@@ -80,12 +76,12 @@
                         (->> initial-viruses
                              (iterate step)
                              (take 300)
-                             (map count)))]
-    (->> (repeat initial-viruses)
-         (take number-of-trials)
-         (map perform-trial)
-         (apply map +)
-         (map #(/ % number-of-trials)))))
+                             (mapv count)))]
+    (into []
+          (comp
+            (take number-of-trials)
+            (map perform-trial))
+          (repeat initial-viruses))))
 
 (comment
   (time (simulate-simple (-> default-db
@@ -93,37 +89,68 @@
                              (assoc :number-of-trials 100))))
   )
 
+(rf/reg-event-db
+  :finalize-simple
+  (fn [db _]
+    (let [number-of-trials (get-in db [:simple-simulation
+                                       :parameters
+                                       :number-of-trials])]
+      (-> db
+          (assoc :chart-spinning? false)
+          (update-in [:simple-simulation]
+                     (fn [simulation]
+                       (let [finalized-results (->> (:partial-results simulation)
+                                                    (apply map +)
+                                                    (map #(/ % number-of-trials)))]
+                         (-> simulation
+                             (dissoc :partial-results)
+                             (assoc :results finalized-results)))))))))
+
 (rf/reg-event-fx
   :compute-simple
   (fn [_ [_ parameters]]
-    {:dispatch [:add-results {:virus-type :simple
-                              :parameters parameters
-                              :results (simulate-simple parameters)
-                              :id (gensym "simple-chart")}]}))
+    (let [trials (:number-of-trials parameters)
+          chunk-size (if (> trials 20)
+                       20
+                       trials)
+          remaining (- trials chunk-size)
+          followup (if (pos? remaining)
+                     [:compute-simple (assoc parameters
+                                             :number-of-trials
+                                             remaining)]
+                     [:finalize-simple])]
+      {:dispatch-n [[:add-results (simulate-simple (assoc parameters
+                                                          :number-of-trials
+                                                          chunk-size))]
+                    followup]})))
 
 (rf/reg-event-fx
   :simulate-simple
   (fn [_ [_ parameters]]
     {:dispatch-n [[:assoc-in [:chart-spinning?] true]
+                  [:assoc-in [:simple-simulation] {:virus-type :simple
+                                                   :parameters parameters
+                                                   :partial-results []
+                                                   :id (gensym "simple-chart")}]
                   [:compute-simple parameters]]}))
 
-(defn config [{:keys [simulation-results virus-type] :as results}]
+(defn config [{:keys [results virus-type] :as simulation-results}]
   (clj->js
     {:type "line"
-     :data {:labels (map #(str "Time " %) (range (count simulation-results)))
+     :data {:labels (map #(str "Time " %) (range (count results)))
             :datasets
             [{:backgroundColor "red"
               :borderColor "red"
               :fill false
               :label (str "Virus count for " (name virus-type) " virus")
               :showLine true
-              :data simulation-results}]}
+              :data results}]}
      :options
      {:responsive true
       :scales {:xAxes [{:display true}]
                :yAxes [{:ticks {:beginAtZero true}}]}}}))
 
-(defn chart [results]
+(defn chart-display [results]
   (let [!ref (atom nil)]
     (r/create-class
       {:display-name "results-chart"
@@ -137,28 +164,33 @@
                    :width "400px"
                    :height "300px"}])})))
 
-(defn charts [results]
-  [:<>
-   (doall (for [result results]
-            ^{:key (:id result)}
-            [:div {:style {:display "flex"
-                           :flex-direction "row"
-                           :justify-content "center"
-                           :align-items "center"
-                           :margin "45px"}}
-             [:div {:style {:width "800px"
-                            :height "600px"}}
-              [chart result]]]))])
+(defn chart-container [results]
+  [:div {:style {:display "flex"
+                 :flex-direction "row"
+                 :justify-content "center"
+                 :align-items "center"
+                 :margin "45px"}}
+   [:div {:style {:width "800px"
+                  :height "600px"}}
+    [chart-display results]]])
 
 (defn page []
   (let [parameters @(rf/subscribe [:get-in [:parameters]])
-        results @(rf/subscribe [:get-in [:simulation-results]])
+        results @(rf/subscribe [:get-in [:simple-simulation]])
         computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
-     [:button {:on-click #(rf/dispatch [:simulate-simple parameters])} "Simulate"]
+     [:button {:on-click #(do
+                            (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                            (rf/dispatch [:simulate-simple parameters]))
+               :disabled computing?} "Simulate"]
      (when computing?
-       [:h1 "Performing " (:number-of-trials parameters) " trials"])
-     [charts results]]))
+       [:h1 "Performed "
+        (-> results :partial-results count)
+        " trials of "
+        (-> parameters
+            :number-of-trials)])
+     (when (seq (:results results))
+       [chart-container results])]))
 
 (defn start []
   (r/render [page]
