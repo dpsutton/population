@@ -17,8 +17,10 @@
 (defmethod reproduce :simple [virus]
   virus)
 
-(defn simple-viruses [number max-birth-prob clear-prob]
-  (take number
+(defmulti initial :virus-type)
+(defmethod initial :simple
+  [{:keys [number-of-viruses max-birth-prob clear-prob]}]
+  (take number-of-viruses
         (repeat {:birth max-birth-prob
                  :clear clear-prob
                  :virus :simple})))

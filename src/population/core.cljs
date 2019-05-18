@@ -11,7 +11,8 @@
                                        :max-population 1000
                                        :max-birth-prob 0.1
                                        :clear-prob 0.05
-                                       :number-of-trials 300}
+                                       :number-of-trials 300
+                                       :virus-type :simple}
                           :partial-results []
                           :results []}}})
 
@@ -21,8 +22,8 @@
 
 (rf/reg-sub
   :simulation-results
-  (fn [db _]
-    (get-in db [:simulations :simple])))
+  (fn [db [_ sim-type partial|full]]
+    (get-in db [:simulations sim-type partial|full])))
 
 (rf/reg-event-db
   :add-results
@@ -41,8 +42,9 @@
   (fn [db [_ path value]]
     (assoc-in db path value)))
 
-(defn simulate-simple [{:keys [number-of-viruses max-population
-                               max-birth-prob clear-prob number-of-trials]}]
+(defn simulate [{:keys [number-of-viruses max-population max-birth-prob
+                        clear-prob number-of-trials]
+                 :as parameters}]
   (let [step (fn step [viruses]
                (loop [alive []
                       q viruses]
@@ -56,9 +58,7 @@
                             (conj (virus/reproduce v)))
                           (rest q))
                    alive)))
-        initial-viruses (virus/simple-viruses number-of-viruses
-                                              max-birth-prob
-                                              clear-prob)
+        initial-viruses (virus/initial parameters)
         perform-trial (fn [viruses]
                         (->> initial-viruses
                              (iterate step)
@@ -71,11 +71,12 @@
           (repeat initial-viruses))))
 
 (comment
-  (time (simulate-simple (-> default-db
-                             :simulations
-                             :simple
-                             :parameters
-                             (assoc :number-of-trials 15))))
+  (time (simulate (-> default-db
+                      :simulations
+                      :simple
+                      :parameters
+                      (assoc :number-of-trials 15)
+                      (assoc :virus-type :simple))))
   )
 
 (defn partial-to-final
@@ -83,24 +84,23 @@
   (let [finalized-results (->> partial-results
                                (apply map +)
                                (mapv #(/ % (:number-of-trials parameters))))]
-    (prn (count finalized-results))
     (-> simulation
         (assoc :partial-results [])
         (assoc :results finalized-results))))
 
 (rf/reg-event-db
-  :finalize-simple
-  (fn [db _]
+  :finalize
+  (fn [db [_ virus-type]]
     (let [number-of-trials (get-in db [:simulations
-                                       :simple
+                                       virus-type
                                        :parameters
                                        :number-of-trials])]
       (-> db
           (assoc :chart-spinning? false)
-          (update-in [:simulations :simple] partial-to-final)))))
+          (update-in [:simulations virus-type] partial-to-final)))))
 
 (rf/reg-event-fx
-  :compute-simple
+  :compute
   (fn [_ [_ parameters]]
     (let [trials (:number-of-trials parameters)
           chunk-size (if (> trials 20)
@@ -108,20 +108,20 @@
                        trials)
           remaining (- trials chunk-size)
           followup (if (pos? remaining)
-                     [:compute-simple (assoc parameters
-                                             :number-of-trials
-                                             remaining)]
-                     [:finalize-simple])]
+                     [:compute (assoc parameters
+                                      :number-of-trials
+                                      remaining)]
+                     [:finalize (:virus-type parameters)])]
       {:dispatch-n [[:add-results :simple
-                     (simulate-simple (assoc parameters :number-of-trials chunk-size))]
+                     (simulate (assoc parameters :number-of-trials chunk-size))]
                     followup]})))
 
 (rf/reg-event-fx
-  :simulate-simple
-  (fn [_ [_ parameters]]
+  :simulate
+  (fn [_ [_ {:keys [virus-type] :as parameters}]]
     {:dispatch-n [[:assoc-in [:chart-spinning?] true]
-                  [:assoc-in [:simulation :simple :parameters] parameters]
-                  [:compute-simple parameters]]}))
+                  [:assoc-in [:simulation virus-type :parameters] parameters]
+                  [:compute parameters]]}))
 
 (defn config [virus-type results]
   (clj->js
@@ -165,13 +165,13 @@
 
 (defn page []
   (let [parameters @(rf/subscribe [:get-in [:simulations :simple :parameters]])
-        simple-results @(rf/subscribe [:get-in [:simulations :simple :results]])
-        simple-partials @(rf/subscribe [:get-in [:simulations :simple :partial-results]])
+        simple-results @(rf/subscribe [:simulation-results :simple :results])
+        simple-partials @(rf/subscribe [:simulation-results :simple :partial-results])
         computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
      [:button {:on-click #(do
                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                            (rf/dispatch [:simulate-simple parameters]))
+                            (rf/dispatch [:simulate parameters]))
                :disabled computing?} "Simulate Simple Virus"]
      (when computing?
        [:h1 "Performed "
