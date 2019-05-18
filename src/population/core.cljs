@@ -70,15 +70,22 @@
         initial-viruses (take number-of-viruses
                               (repeat {:birth max-birth-prob
                                        :clear clear-prob
-                                       :virus :simple}))]
-    (->> initial-viruses
-         (iterate step)
+                                       :virus :simple}))
+        perform-trial (fn [viruses]
+                        (->> initial-viruses
+                             (iterate step)
+                             (take 300)
+                             (map count)))]
+    (->> (repeat initial-viruses)
          (take number-of-trials)
-         (map count))))
+         (map perform-trial)
+         (apply map +)
+         (map #(/ % number-of-trials)))))
 
 (comment
   (time (simulate-simple (-> default-db
-                             :parameters)))
+                             :parameters
+                             (assoc :number-of-trials 100))))
   )
 
 (rf/reg-event-fx
