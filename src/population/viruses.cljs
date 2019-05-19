@@ -9,8 +9,10 @@
   (chance? clear))
 
 (defmethod dies? :resistant [{:keys [clear resistances]} active-drugs]
-  (and (every? resistances active-drugs)
-       (chance? clear)))
+  (if (seq active-drugs)
+    (or (some (complement resistances) active-drugs)
+        (chance? clear))
+    (chance? clear)))
 
 (defmulti reproduces? (fn [virus pop-density active-drugs] (:virus virus)))
 
