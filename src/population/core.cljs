@@ -192,7 +192,10 @@
         resistant-partials @(rf/subscribe [:simulation-results :resistant :partial-results])
         computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
-     [:div
+     [:div {:style {:margin-top "4vh"
+                    :display "flex"
+                    :flex-direction "row"
+                    :justify-content "space-around"}}
       [:button {:type :button
                 :class "btn btn-dark"
                 :on-click #(do
