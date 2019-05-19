@@ -202,9 +202,10 @@
    (when computing?
      [:h1 "Performed "
       (-> partial-results count)
-      " trials of "
+      " of "
       (-> parameters
-          :number-of-trials)])
+          :number-of-trials)
+      " trials."])
    (when (seq results)
      [chart-container parameters results])])
 
