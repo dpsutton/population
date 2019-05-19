@@ -174,20 +174,28 @@
                                 (Chart. (.getContext com "2d") (config sim-type results))))
        :reagent-render
        (fn [results]
-         [:canvas {:ref (fn [com] (reset! !ref com))
-                   :id (name sim-type)
-                   :width "400px"
-                   :height "300px"}])})))
+         [:div {:width "1000px"
+                :height "500px"}
+          [:canvas {:ref (fn [com] (reset! !ref com))
+                    :id (name sim-type)
+                    :height "500px"
+                    :width "900px"}]])})))
 
-(defn chart-container [sim-type results]
+(defn chart-description [parameters]
+  [:div
+   [:ul.list-group
+    (doall (for [k (-> parameters keys sort)]
+             ^{:key (name k)}
+             [:li.list-group-item (name k) ": " (k parameters)]))]])
+
+(defn chart-container [parameters results]
   [:div {:style {:display "flex"
                  :flex-direction "row"
                  :justify-content "center"
                  :align-items "center"
                  :margin "85px"}}
-   [:div {:style {:width "500px"
-                  :height "300px"}}
-    [chart-display sim-type results]]])
+   [chart-display (:virus-type parameters) results]
+   [chart-description parameters]])
 
 (defn display-results [{:keys [parameters results partial-results computing?] :as simulation}]
   [:div
@@ -198,7 +206,7 @@
       (-> parameters
           :number-of-trials)])
    (when (seq results)
-     [chart-container (:virus-type parameters) results])])
+     [chart-container parameters results])])
 
 (defn page []
   (let [simple @(rf/subscribe [:get-in [:simulations :simple]])
@@ -207,20 +215,23 @@
         simulate! #(do (rf/dispatch-sync [:assoc-in [:simulations (get-in % [:parameters :virus-type]) :computing?] true])
                        (rf/dispatch [:simulate (:parameters %)]))]
     [:div
-     [:div {:style {:margin-top "4vh"
-                    :display "flex"
-                    :flex-direction "row"
-                    :justify-content "space-around"}}
-      [:button {:type :button
-                :class "btn btn-dark"
-                :on-click #(simulate! simple)
-                :disabled computing?} "Simulate Simple Virus"]
-      [:button {:type :button
-                :class "btn btn-dark"
-                :on-click #(simulate! resistant)
-                :disabled computing?} "Simulate Drug-Resistant Virus"]]
-     [display-results simple]
-     [display-results resistant]]))
+     [:div#buttons
+      [:div {:style {:margin-top "4vh"
+                     :margin-bottom "8vh"
+                     :display "flex"
+                     :flex-direction "row"
+                     :justify-content "space-around"}}
+       [:button {:type :button
+                 :class "btn btn-dark"
+                 :on-click #(simulate! simple)
+                 :disabled computing?} "Simulate Simple Virus"]
+       [:button {:type :button
+                 :class "btn btn-dark"
+                 :on-click #(simulate! resistant)
+                 :disabled computing?} "Simulate Drug-Resistant Virus"]]]
+     [:div#charts
+      [display-results simple]
+      [display-results resistant]]]))
 
 (defn start []
   (r/render [page]
