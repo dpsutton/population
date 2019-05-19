@@ -4,9 +4,11 @@ html, body {
   height: 100%;
 }
 
-body {
+#charts {
   margin: 0;
-  display: flex;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
 
   /* This centers our sketch horizontally. */
   justify-content: center;

@@ -191,6 +191,7 @@
 (defn chart-container [parameters results]
   [:div {:style {:display "flex"
                  :flex-direction "row"
+                 :flex-wrap "wrap"
                  :justify-content "center"
                  :align-items "center"
                  :margin "85px"}}
@@ -215,21 +216,20 @@
         computing? (some :computing? [simple resistant])
         simulate! #(do (rf/dispatch-sync [:assoc-in [:simulations (get-in % [:parameters :virus-type]) :computing?] true])
                        (rf/dispatch [:simulate (:parameters %)]))]
-    [:div
-     [:div#buttons
-      [:div {:style {:margin-top "4vh"
-                     :margin-bottom "8vh"
-                     :display "flex"
-                     :flex-direction "row"
-                     :justify-content "space-around"}}
-       [:button {:type :button
-                 :class "btn btn-dark"
-                 :on-click #(simulate! simple)
-                 :disabled computing?} "Simulate Simple Virus"]
-       [:button {:type :button
-                 :class "btn btn-dark"
-                 :on-click #(simulate! resistant)
-                 :disabled computing?} "Simulate Drug-Resistant Virus"]]]
+    [:div.container
+     [:div#buttons {:style {:margin-top "4vh"
+                            :margin-bottom "3vh"
+                            :display "flex"
+                            :flex-direction "row"
+                            :justify-content "space-between"}}
+      [:button {:type :button
+                :class "btn btn-dark"
+                :on-click #(simulate! simple)
+                :disabled computing?} "Simulate Simple Virus"]
+      [:button {:type :button
+                :class "btn btn-dark"
+                :on-click #(simulate! resistant)
+                :disabled computing?} "Simulate Drug-Resistant Virus"]]
      [:div#charts
       [display-results simple]
       [display-results resistant]]]))
