@@ -12,7 +12,8 @@
                                        :max-birth-prob 0.1
                                        :clear-prob 0.05
                                        :number-of-trials 100
-                                       :virus-type :simple}
+                                       :virus-type :simple
+                                       :active-drugs #{}}
                           :partial-results []
                           :results []}
                  :resistant {:parameters {:number-of-viruses 100
@@ -21,10 +22,10 @@
                                           :clear-prob 0.05
                                           :number-of-trials 100
                                           :virus-type :resistant
-                                          :resistances {:drug-a true
-                                                        :drug-b true}
-                                          :mutation-prob 0.1
-                                          :active-drugs #{:drug-a :drug-b}}
+                                          :resistances {:drug-a false}
+                                          :take-drugs {150 #{:drug-a}}
+                                          :mutation-prob 0.005
+                                          :active-drugs #{}}
                              :partial-results []
                              :results []}}})
 
@@ -55,29 +56,36 @@
     (assoc-in db path value)))
 
 (defn simulate [{:keys [number-of-viruses max-population max-birth-prob
-                        clear-prob number-of-trials active-drugs]
+                        clear-prob number-of-trials active-drugs take-drugs]
                  :as parameters}]
-  (let [step (fn step [viruses]
-               (loop [alive []
-                      q viruses]
-                 (if-let [v (first q)]
-                   (let [dies? (virus/dies? v active-drugs)]
-                    (recur (cond-> alive
-                             (not dies?) (conj v)
+  (let [step (fn step [{:keys [viruses active-drugs n]}]
+               (let [active-drugs (if-let [new-drugs (get take-drugs n)]
+                                    (into active-drugs new-drugs)
+                                    active-drugs)]
+                 (loop [alive []
+                        q viruses]
+                   (if-let [v (first q)]
+                     (let [dies? (virus/dies? v active-drugs)]
+                       (recur (cond-> alive
+                                (not dies?) (conj v)
 
-                             (and (not dies?)
-                                  (virus/reproduces? v (/ (+ (count alive)
-                                                             (count viruses))
-                                                          max-population)))
-                             (conj (virus/reproduce v)))
-                           (rest q)))
-                   alive)))
+                                (and (not dies?)
+                                     (virus/reproduces? v (/ (+ (count alive)
+                                                                (count viruses))
+                                                             max-population)))
+                                (conj (virus/reproduce v)))
+                              (rest q)))
+                     {:viruses alive
+                      :n (inc n)
+                      :active-drugs active-drugs}))))
         initial-viruses (virus/initial parameters)
         perform-trial (fn [viruses]
-                        (->> initial-viruses
+                        (->> {:viruses initial-viruses
+                              :n 0
+                              :active-drugs active-drugs}
                              (iterate step)
                              (take 300)
-                             (mapv count)))]
+                             (mapv (comp count :viruses))))]
     (into []
           (comp
             (take number-of-trials)
@@ -85,17 +93,17 @@
           (repeat initial-viruses))))
 
 (comment
-  (time (simulate (-> default-db
-                      :simulations
-                      :simple
-                      :parameters
-                      (assoc :number-of-trials 15))))
+  (simulate (-> default-db
+                :simulations
+                :simple
+                :parameters
+                (assoc :number-of-trials 1)))
 
-  (time (simulate (-> default-db
-                      :simulations
-                      :simple
-                      :parameters
-                      (assoc :number-of-trials 15))))
+  (simulate (-> default-db
+                :simulations
+                :resistant
+                :parameters
+                (assoc :number-of-trials 1)))
   )
 
 (defn partial-to-final
