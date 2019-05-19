@@ -199,14 +199,14 @@
       [:button {:type :button
                 :class "btn btn-dark"
                 :on-click #(do
-                              (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                              (rf/dispatch [:simulate parameters]))
+                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                             (rf/dispatch [:simulate parameters]))
                 :disabled computing?} "Simulate Simple Virus"]
       [:button {:type :button
                 :class "btn btn-dark"
                 :on-click #(do
-                              (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                              (rf/dispatch [:simulate resistant-parameters]))
+                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                             (rf/dispatch [:simulate resistant-parameters]))
                 :disabled computing?} "Simulate Drug-Resistant Virus"]]
      (when computing?
        [:h1 "Performed "
