@@ -115,7 +115,7 @@
                                        :parameters
                                        :number-of-trials])]
       (-> db
-          (assoc :chart-spinning? false)
+          (assoc-in [:simulations virus-type :computing?] false)
           (update-in [:simulations virus-type] partial-to-final)))))
 
 (rf/reg-event-fx
@@ -138,8 +138,7 @@
 (rf/reg-event-fx
   :simulate
   (fn [_ [_ {:keys [virus-type] :as parameters}]]
-    {:dispatch-n [[:assoc-in [:chart-spinning?] true]
-                  [:assoc-in [:simulation virus-type :parameters] parameters]
+    {:dispatch-n [[:assoc-in [:simulation virus-type :parameters] parameters]
                   [:compute parameters]]}))
 
 (defn config [virus-type results]
@@ -182,15 +181,23 @@
                   :height "300px"}}
     [chart-display sim-type results]]])
 
-(defn page []
-  (let [parameters @(rf/subscribe [:get-in [:simulations :simple :parameters]])
-        simple-results @(rf/subscribe [:simulation-results :simple :results])
-        simple-partials @(rf/subscribe [:simulation-results :simple :partial-results])
+(defn display-results [{:keys [parameters results partial-results computing?] :as simulation}]
+  [:div
+   (when computing?
+     [:h1 "Performed "
+      (-> partial-results count)
+      " trials of "
+      (-> parameters
+          :number-of-trials)])
+   (when (seq results)
+     [chart-container (:virus-type parameters) results])])
 
-        resistant-parameters @(rf/subscribe [:get-in [:simulations :resistant :parameters]])
-        resistant-results @(rf/subscribe [:simulation-results :resistant :results])
-        resistant-partials @(rf/subscribe [:simulation-results :resistant :partial-results])
-        computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
+(defn page []
+  (let [simple @(rf/subscribe [:get-in [:simulations :simple]])
+        resistant @(rf/subscribe [:get-in [:simulations :resistant]])
+        computing? (some :computing? [simple resistant])
+        simulate! #(do (rf/dispatch-sync [:assoc-in [:simulations (get-in % [:parameters :virus-type]) :computing?] true])
+                       (rf/dispatch [:simulate (:parameters %)]))]
     [:div
      [:div {:style {:margin-top "4vh"
                     :display "flex"
@@ -198,26 +205,14 @@
                     :justify-content "space-around"}}
       [:button {:type :button
                 :class "btn btn-dark"
-                :on-click #(do
-                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                             (rf/dispatch [:simulate parameters]))
+                :on-click #(simulate! simple)
                 :disabled computing?} "Simulate Simple Virus"]
       [:button {:type :button
                 :class "btn btn-dark"
-                :on-click #(do
-                             (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                             (rf/dispatch [:simulate resistant-parameters]))
+                :on-click #(simulate! resistant)
                 :disabled computing?} "Simulate Drug-Resistant Virus"]]
-     (when computing?
-       [:h1 "Performed "
-        (-> resistant-partials count)
-        " trials of "
-        (-> parameters
-            :number-of-trials)])
-     (when (seq simple-results)
-       [chart-container :simple simple-results])
-     (when (seq resistant-results)
-       [chart-container :resistant resistant-results])]))
+     [display-results simple]
+     [display-results resistant]]))
 
 (defn start []
   (r/render [page]
