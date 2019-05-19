@@ -177,9 +177,9 @@
                  :flex-direction "row"
                  :justify-content "center"
                  :align-items "center"
-                 :margin "45px"}}
-   [:div {:style {:width "800px"
-                  :height "600px"}}
+                 :margin "85px"}}
+   [:div {:style {:width "500px"
+                  :height "300px"}}
     [chart-display sim-type results]]])
 
 (defn page []
@@ -192,14 +192,19 @@
         resistant-partials @(rf/subscribe [:simulation-results :resistant :partial-results])
         computing? @(rf/subscribe [:get-in [:chart-spinning?]])]
     [:div
-     [:button {:on-click #(do
-                            (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                            (rf/dispatch [:simulate parameters]))
-               :disabled computing?} "Simulate Simple Virus"]
-     [:button {:on-click #(do
-                            (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
-                            (rf/dispatch [:simulate resistant-parameters]))
-               :disabled computing?} "Simulate Drug resistant Virus"]
+     [:div
+      [:button {:type :button
+                :class "btn btn-dark"
+                :on-click #(do
+                              (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                              (rf/dispatch [:simulate parameters]))
+                :disabled computing?} "Simulate Simple Virus"]
+      [:button {:type :button
+                :class "btn btn-dark"
+                :on-click #(do
+                              (rf/dispatch-sync [:assoc-in [:chart-spinning?] true])
+                              (rf/dispatch [:simulate resistant-parameters]))
+                :disabled computing?} "Simulate Drug-Resistant Virus"]]
      (when computing?
        [:h1 "Performed "
         (-> resistant-partials count)
