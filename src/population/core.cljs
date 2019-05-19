@@ -177,9 +177,9 @@
                  :flex-direction "row"
                  :justify-content "center"
                  :align-items "center"
-                 :margin "45px"}}
-   [:div {:style {:width "800px"
-                  :height "600px"}}
+                 :margin "85px"}}
+   [:div {:style {:width "500px"
+                  :height "300px"}}
     [chart-display sim-type results]]])
 
 (defn page []
